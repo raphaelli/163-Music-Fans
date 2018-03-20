@@ -4,6 +4,8 @@ import time
 import re
 import Net_Compare
 from selenium.common.exceptions import NoSuchElementException
+import pymysql.cursors
+
 """
 思路：因为网易云是ajax，所以单纯采用requests和BeautifulSoup是很难实现的，有些网站可以实现，但是网易云的js的请求是post，并且date是动态变化加密的。
 所以这里我们引入selenium库来模拟浏览器行为获取网页。
@@ -44,17 +46,13 @@ def Work_Mian(id, state=1 , id1=1):
                     # 声明正则表达式
                     pattern = re.compile('<b title=".*?">(.*?)</b>.*?hidefocus="true">(.*?)</a>.*?style="width:(.*?);"', re.S)
                     gorp = re.findall(pattern, a.page_source)
-                    # 将读取到的数据存入文本文档
-                    for i in gorp:
-                        f = open("song/"+id+'.txt', 'a+', encoding='utf-8')
-                        f.write(i[0]+':'+i[1].replace('\xa0', ' ')+'   '+i[2]+'\n')
-                        f.close()
-                    print('存取成功！')
+                    Data_Base(id=id, gorp=gorp, c=1)# 存入数据库
         a.quit()
         if state == 1:
             main()
         else:
-            Net_Compare.compare(id, id1)
+            print('正在对比....')
+            # Net_Compare.compare(id, id1)
 
     except NoSuchElementException:
         if state == 1:
@@ -64,6 +62,39 @@ def Work_Mian(id, state=1 , id1=1):
         if state == 2:
             print(str(id)+'该用户数据被设为隐私，不可爬取')
             main()
+
+def Data_Base(id, gorp, c=1):# 调用数据库
+
+    connect = pymysql.Connect(
+        host='xxx.xxx.xxx.xxx',
+        port=3306,
+        user='root',
+        passwd='root',
+        db='NeteaseMusicResult',
+        charset='utf8'
+    )
+    cursor = connect.cursor()
+
+    if c == 1:#代表全新存入
+        try:
+            data = "create table a" + str(
+                id) + "(id int(5) PRIMARY KEY,songname varchar(50),songer varchar(50),percentage char(5));"
+            cursor.execute(data)
+        except Exception:
+            data_new ="truncate table a"+id
+            cursor.execute(data_new)
+        d = 0
+        for i in gorp:
+            sql ="INSERT INTO a"+id+ "(id, songname, songer,percentage) VALUES ( '%d', '%s', '%s','%s')"
+            # 防止有些单引号双引号
+            sql_data = (d, i[0].replace('\'', '\\\''), i[1].replace('\xa0', ' '), i[2])
+            d = d+1
+            cursor.execute(sql%sql_data)
+        cursor.close()
+        connect.close()
+        print('爬取成功！')
+
+
 
 def input_id():
     print('请输入你要爬取的用户ID:')
